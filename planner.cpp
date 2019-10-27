@@ -45,8 +45,11 @@ using namespace std;
 
 int GOALX;
 int GOALY;
-int TIME_DIFF_MARGIN = 200;
+int TIME_DIFF_MARGIN = 100;
 typedef pair<int, pair<int,int>> pii;  //First is f value, second is x,y position.
+
+static unordered_map<int, int> parent;                                       //Define the parent map.
+
 static void planner(
         double*	map,
         int collision_thresh,
@@ -65,6 +68,8 @@ static void planner(
     action_ptr[0] = robotposeX;
 	action_ptr[1] = robotposeY;
     int w_cost2go = 1;                                                        //Define the weight of cost to go.
+    int ori_idx = GETMAPINDEX(robotposeX,robotposeY,x_size,y_size);           
+    parent[ori_idx] = ori_idx;                                                //Initialize the parent of start index to be itself.
 
     cout << "cur_time is: " << curr_time << endl;
 	int size = x_size * y_size;
@@ -87,7 +92,6 @@ static void planner(
 
 		vector<vector<int>> time2come;                                        //Initialize the time to come array for each grid in map.
 		time2come.assign(x_size, vector<int>(y_size, INT_MAX));
-        int ori_idx = GETMAPINDEX(robotposeX,robotposeY,x_size,y_size);
 
         cost2come_array[ori_idx] = 0;                                         //Initialize the start point cost to come to be 0.
 		time2come[robotposeX][robotposeY] = 0;                                //Initialize the time to come for the starting node.
@@ -130,6 +134,7 @@ static void planner(
 							if (cost2come_array[idx] > cost2come_array[cur_idx] + cost2come) {
 								cost2come_array[idx] = cost2come_array[cur_idx] + cost2come;
 								mq.push({ cost2come_array[idx], {newx, newy} });
+                                parent[idx] = cur_idx;
 							}
 						}
 					}
@@ -152,77 +157,7 @@ static void planner(
                 //cout << "GOAL FOUND!: " << GOALX << " " << GOALY << " Index: " << i << endl; 
                 break;
             }
-        }   
-    }
-	else {
-		/*This is the A* search to get an optimal path from current position to the goal.
-         *To be frankly, we can already get an optimal path from the Dijkstra search in 
-         *the preprocess, but I want to also try A* algorithm here. Theoretically, the A* 
-         *path should be exactly the same as the Dijkstra path.
-         */
-		auto start = high_resolution_clock::now();
-        //Do pre-planning
-		vector<int> cost2come_array;                                          //Initialize the time to come array for each grid in map.
-		cost2come_array.assign(size, INT_MAX);
-        unordered_map<int, int> parent;                                       //Define the parent map.
-
-        int ori_idx = GETMAPINDEX(robotposeX,robotposeY,x_size,y_size);       //Initialize the parent of start index to be itself.
-        parent[ori_idx] = ori_idx;
-
-        cost2come_array[ori_idx] = 0;                                         //Initialize the start point cost to come to be 0.
-		vector<int> closed_status;                                            //Initialize closed status array.
-		closed_status.assign(size, 0);
-		priority_queue<pii, vector<pii>, greater<pii>> mq;                    //Define the priority queue for searching and initialize.  
-        double dist = 0.0;
-        dist = sqrt(pow(GOALX-robotposeX, 2) + pow(GOALY-robotposeY, 2));     
-		mq.push({ dist, {robotposeX, robotposeY} });
-                                            
-		int count = 0;
-        while (!mq.empty()){
-			++count;
-			//cout << "mq size is: " << mq.size() << endl;
-			pii cur = mq.top(); mq.pop();
-			int cur_fvalue = cur.first;
-			int cur_X = cur.second.first; 
-			int cur_Y = cur.second.second;
-			int cur_idx = GETMAPINDEX(cur_X, cur_Y, x_size, y_size);
-			closed_status[cur_idx] = 1;                                       //Mark this grid to be searched. 
-
-            if (cur_X == GOALX && cur_Y == GOALY){
-                // Reach the GOAL!
-                break;
-            }
-
-			for (int dir = 0; dir < NUMOFDIRS; dir++)
-			{
-				int newx = cur_X + dX[dir];
-				int newy = cur_Y + dY[dir];
-				if (newx >= 1 && newx <= x_size && newy >= 1 && newy <= y_size)
-				{
-					if ((int)map[GETMAPINDEX(newx, newy, x_size, y_size)] < collision_thresh)  //Obstacle free condition.
-					{
-						int idx = GETMAPINDEX(newx, newy, x_size, y_size);
-						double cost2come = (int)map[idx];
-                        dist = sqrt(pow(GOALX-newx, 2) + pow(GOALY-newy, 2));
-						if (closed_status[idx] == 0) {
-							if (cost2come_array[idx] > cost2come_array[cur_idx] + cost2come) {
-								cost2come_array[idx] = cost2come_array[cur_idx] + cost2come;
-								mq.push({ cost2come_array[idx] + w_cost2go * dist, {newx, newy} });
-                                parent[idx] = cur_idx;
-							}
-						}
-					}
-				}
-			}
         }
-        /*
-		auto stop = high_resolution_clock::now();
-		auto duration = duration_cast<microseconds>(stop - start);
-		int temp = accumulate(closed_status.begin(), closed_status.end(), 0);
-		cout << "total number of searched nodes: " << count << endl;
-		cout << "Time for D search: " << duration.count() << endl;
-		cout << "Finished D search." << endl;
-        */
 
         // Start to do the backtracking.
         int goal_idx = GETMAPINDEX(GOALX, GOALY, x_size, y_size);
@@ -235,8 +170,28 @@ static void planner(
         //cout << "Next position: " << action_x << ", " << action_y << " Index: " << bt_idx << " " << goal_idx << endl;
 		action_ptr[0] = action_x;
 		action_ptr[1] = action_y;
-		
+
+    }
+	else {
+		/*This is the A* search to get an optimal path from current position to the goal.
+         *To be frankly, we can already get an optimal path from the Dijkstra search in 
+         *the preprocess, but I want to also try A* algorithm here. Theoretically, the A* 
+         *path should be exactly the same as the Dijkstra path.
+         */
+
+        // Start to do the backtracking.
+        int goal_idx = GETMAPINDEX(GOALX, GOALY, x_size, y_size);
+        int bt_idx = goal_idx;
+        while (parent[parent[bt_idx]] != parent[bt_idx]){
+            bt_idx = parent[bt_idx];
+        }
+        int action_x = bt_idx % x_size + 1;
+        int action_y = bt_idx / x_size + 1;
+        //cout << "Next position: " << action_x << ", " << action_y << " Index: " << bt_idx << " " << goal_idx << endl;
+		action_ptr[0] = action_x;
+		action_ptr[1] = action_y;
 	}
+
     return;
 }
 
