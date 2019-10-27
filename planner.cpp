@@ -133,7 +133,7 @@ int isEmpty(Node** head)
 
 int GOALX;
 int GOALY;
-int TIME_DIFF_MARGIN = 200;
+int TIME_DIFF_MARGIN = 400;
 typedef pair<int, pair<int,int>> pii;  //First is cost2come, second is x,y position.
 static void planner(
         double*	map,
