@@ -1,0 +1,17 @@
+1. Priority is the cost to come + cost to go;
+ 
+2. Data is the x and y coordinate of the node;
+
+3. Previous is the previous node that it connects to.
+
+
+
+
+
+
+
+
+
+
+Problem:
+	1. How to deal with the node that is been done. (A: Create a status map for every node. If one node is expanded, then it is 1, if not, it is 0.)
